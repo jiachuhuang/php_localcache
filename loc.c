@@ -36,6 +36,20 @@ zend_class_entry *loc_class_ce;
 
 ZEND_DECLARE_MODULE_GLOBALS(loc)
 
+ZEND_BEGIN_ARG_INFO_EX(arginfo_loc_setter, 0, 0, 2)
+	ZEND_ARG_INFO(0, key)
+	ZEND_ARG_INFO(0, value)
+	ZEND_ARG_INFO(0, ttl)	
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_loc_get, 0, 0, 1)
+	ZEND_ARG_INFO(0, key)	
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_loc_delete, 0, 0, 1)
+	ZEND_ARG_INFO(0, key)	
+ZEND_END_ARG_INFO()
+
 ZEND_BEGIN_ARG_INFO_EX(arginfo_loc_void, 0, 0, 0)
 ZEND_END_ARG_INFO()
 
@@ -145,6 +159,11 @@ PHP_METHOD(loc, flush) {
 
 zend_function_entry loc_methods[] = {
 	PHP_ME(loc, __construct, arginfo_loc_void, ZEND_ACC_PUBLIC|ZEND_ACC_CTOR)	
+	PHP_ME(loc, get, arginfo_loc_get, ZEND_ACC_PUBLIC)	
+	PHP_ME(loc, set, arginfo_loc_setter, ZEND_ACC_PUBLIC)	
+	PHP_ME(loc, add, arginfo_loc_setter, ZEND_ACC_PUBLIC)	
+	PHP_ME(loc, delete, arginfo_loc_delete, ZEND_ACC_PUBLIC)	
+	PHP_ME(loc, flush, arginfo_loc_void, ZEND_ACC_PUBLIC)	
 	{NULL, NULL, NULL}
 };
 /* }}} */
