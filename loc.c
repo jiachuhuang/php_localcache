@@ -151,6 +151,7 @@ int loc_set(char *key, size_t key_len, zval *value, long ttl, int add) {
 					return 0;
 				}
 
+				flag |= LOC_VAL_COMPRESS;
 				flag |= (Z_STRLEN_P(value) << LOC_VAL_ORIG_LEN_SHIT);
 				result = c_storage_update(key, key_len, compress, compress_len, ttl, flag, add, tv);
 				free(compress);
@@ -182,6 +183,7 @@ int loc_set(char *key, size_t key_len, zval *value, long ttl, int add) {
 					return 0;
 				}
 
+				flag |= LOC_VAL_COMPRESS;
 				flag |= (buf.s->len << LOC_VAL_ORIG_LEN_SHIT);
 				result = c_storage_update(key, key_len, compress, compress_len, ttl, flag, add, tv);
 				free(compress);					
