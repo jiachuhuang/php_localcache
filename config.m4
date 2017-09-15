@@ -43,6 +43,7 @@ if test "$PHP_LOC" != "no"; then
   dnl # --with-loc -> add include path
   PHP_ADD_INCLUDE($LOC_DIR/c_cache)
   PHP_ADD_INCLUDE($LOC_DIR/lzf)
+  PHP_ADD_INCLUDE($LOC_DIR/serializer)
 
   dnl # --with-loc -> check for lib and symbol presence
   dnl LIBNAME=loc # you may want to change this

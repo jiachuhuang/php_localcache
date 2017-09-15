@@ -28,11 +28,15 @@
 #include "php_ini.h"
 #include "ext/standard/info.h"
 #include "php_loc.h"
+#include "zend_smart_str.h"
+#include "SAPI.h"
 
 #include "c_cache/c_cache.h"
 #include "c_cache/c_storage.h"
 
-#include "serializer/loc_serializer.c"
+#include "serializer/loc_serializer.h"
+#include "lzf/lzf.h"
+#include "lzf/lzfP.h"
 
 extern c_shared_header *shared_header;
 
@@ -98,12 +102,13 @@ static void php_loc_init_globals(zend_loc_globals *loc_globals)
 */
 /* }}} */
 
-int loc_set(char *key, size_t key_len, zval *data, long ttl, int add) {
+int loc_set(char *key, size_t key_len, zval *value, long ttl, int add) {
 	time_t tv;
 	int flag = Z_TYPE_P(value);
 	int result = 0;
 	void *compress;
 	unsigned int compress_len, out_len;
+	smart_str buf = {0};
 
 	if(key_len > C_STORAGE_MAX_KEY_LEN) {
 		php_error_docref(NULL, E_WARNING, "Key too big, can not storage");
@@ -124,10 +129,10 @@ int loc_set(char *key, size_t key_len, zval *data, long ttl, int add) {
 			result = c_storage_update(key, key_len, (void *)&flag, sizeof(int), ttl, flag, add, tv);
 			break;
 		case IS_LONG:
-			result = c_storage_update(key, key_len, (void *)&Z_LVAL_P(data), sizeof(long), ttl, flag, add, tv);
+			result = c_storage_update(key, key_len, (void *)&Z_LVAL_P(value), sizeof(long), ttl, flag, add, tv);
 			break;
 		case IS_DOUBLE:
-			result = c_storage_update(key, key_len, (void *)&Z_DVAL_P(data), sizeof(double), ttl, flag, add, tv);
+			result = c_storage_update(key, key_len, (void *)&Z_DVAL_P(value), sizeof(double), ttl, flag, add, tv);
 			break;
 		case IS_STRING:
 		case IS_CONSTANT: 
@@ -154,43 +159,43 @@ int loc_set(char *key, size_t key_len, zval *data, long ttl, int add) {
 			}
 			break;
 #ifdef IS_CONSTANT_ARRAY
-			case IS_CONSTANT_ARRAY:
+		case IS_CONSTANT_ARRAY:
 #endif				
-			case IS_ARRAY:
-			case IS_OBJECT:
-				smart_str sb = {0};
-				loc_serializer_pack(value, &sb);
-				if(sb.s->len > C_STORAGE_SEGMENT_BODY_SIZE(shared_header)) {
-					php_error_docref(NULL, E_WARNING, "Value too long(%d), can not be storaged", sb.s->len);
-					smart_str_free(&sb);
-					return 0;						
+		case IS_ARRAY:
+		case IS_OBJECT:
+
+			loc_serializer_pack(value, &buf);
+			if(buf.s->len > C_STORAGE_SEGMENT_BODY_SIZE(shared_header)) {
+				php_error_docref(NULL, E_WARNING, "Value too long(%d), can not be storaged", buf.s->len);
+				smart_str_free(&buf);
+				return 0;						
+			}
+
+			if(buf.s->len > LOC_VAL_COMPRESS_MIN_LEN) {
+				out_len = buf.s->len - 4;
+				compress = malloc(out_len);
+				compress_len = lzf_compress((void*)ZSTR_VAL(buf.s), ZSTR_LEN(buf.s), compress, out_len);
+				if(!compress_len || compress_len > out_len) {
+					php_error_docref(NULL, E_WARNING, "Compressd fail");
+					free(compress);
+					smart_str_free(&buf);
+					return 0;
 				}
 
-				if(sb.s->len > LOC_VAL_COMPRESS_MIN_LEN) {
-					out_len = sb.s->len - 4;
-					compress = malloc(out_len);
-					compress_len = lzf_compress((void*)ZSTR_VAL(sb.s), ZSTR_LEN(sb.s), compress, out_len);
-					if(!compress_len || compress_len > out_len) {
-						php_error_docref(NULL, E_WARNING, "Compressd fail");
-						free(compress);
-						smart_str_free(&sb);
-						return 0;
-					}
-
-					flag |= (sb.s->len << LOC_VAL_ORIG_LEN_SHIT);
-					result = c_storage_update(key, key_len, compress, compress_len, ttl, flag, add, tv);
-					free(compress);					
-				} else {
-					result = c_storage_update(key, key_len, (void*)ZSTR_VAL(sb.s), ZSTR_LEN(sb.s), ttl, flag, add, tv);
-					smart_str_free(&sb);
-				}
-				break;
-			case IS_RESOURCE:
-				php_error_docref(NULL, E_WARNING, "Type 'IS_RESOURCE' cannot be stored");
-				break;
-			default:
-				php_error_docref(NULL, E_WARNING, "Unsupported valued type to be stored '%d'", flag);
-				break;
+				flag |= (buf.s->len << LOC_VAL_ORIG_LEN_SHIT);
+				result = c_storage_update(key, key_len, compress, compress_len, ttl, flag, add, tv);
+				free(compress);					
+			} else {
+				result = c_storage_update(key, key_len, (void*)ZSTR_VAL(buf.s), ZSTR_LEN(buf.s), ttl, flag, add, tv);
+				smart_str_free(&buf);
+			}
+			break;
+		case IS_RESOURCE:
+			php_error_docref(NULL, E_WARNING, "Type 'IS_RESOURCE' cannot be stored");
+			break;
+		default:
+			php_error_docref(NULL, E_WARNING, "Unsupported valued type to be stored '%d'", flag);
+			break;
 	}
 
 	return result;

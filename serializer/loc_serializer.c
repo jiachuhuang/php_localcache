@@ -6,6 +6,7 @@
 #include "php.h"
 #include "ext/standard/php_var.h" /* for serialize */
 #include "zend_smart_str.h"
+#include "loc_serializer.h"
 
 int loc_serializer_pack(zval *data, smart_str *sb) {
 	php_serialize_data_t s_data;
@@ -28,7 +29,6 @@ zval* loc_serializer_pack_unpack(char *content, size_t len, zval *return_val) {
 	if (!php_var_unserialize(return_val, &p, p + len,  &us_data)) {
 		zval_ptr_dtor(return_val);
 		PHP_VAR_UNSERIALIZE_DESTROY(us_data);
-		spprintf(msg, 0, "unpack error at offset %ld of %ld bytes", (long)((char*)p - content), len);
 		return NULL;
 	}
 	PHP_VAR_UNSERIALIZE_DESTROY(us_data);
