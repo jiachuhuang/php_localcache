@@ -22,6 +22,8 @@
 #include "config.h"
 #endif
 
+#include <time.h>
+
 #include "php.h"
 #include "php_ini.h"
 #include "ext/standard/info.h"
@@ -29,6 +31,8 @@
 
 #include "c_cache/c_cache.h"
 #include "c_cache/c_storage.h"
+
+#include "serializer/loc_serializer.c"
 
 extern c_shared_header *shared_header;
 
@@ -83,35 +87,6 @@ PHP_INI_END()
 
 /* }}} */
 
-/* Remove the following function when you have successfully modified config.m4
-   so that your module can be compiled into PHP, it exists only for testing
-   purposes. */
-
-/* Every user-visible function in PHP should document itself in the source */
-/* {{{ proto string confirm_loc_compiled(string arg)
-   Return a string to confirm that the module is compiled in */
-PHP_FUNCTION(confirm_loc_compiled)
-{
-	char *arg = NULL;
-	size_t arg_len, len;
-	zend_string *strg;
-
-	if (zend_parse_parameters(ZEND_NUM_ARGS(), "s", &arg, &arg_len) == FAILURE) {
-		return;
-	}
-
-	strg = strpprintf(0, "Congratulations! You have successfully modified ext/%.78s/config.m4. Module %.78s is now compiled into PHP.", "loc", arg);
-
-	RETURN_STR(strg);
-}
-/* }}} */
-/* The previous line is meant for vim and emacs, so it can correctly fold and
-   unfold functions in source code. See the corresponding marks just before
-   function definition, where the functions purpose is also documented. Please
-   follow this convention for the convenience of others editing your code.
-*/
-
-
 /* {{{ php_loc_init_globals
  */
 /* Uncomment this function if you have INI entries
@@ -123,37 +98,307 @@ static void php_loc_init_globals(zend_loc_globals *loc_globals)
 */
 /* }}} */
 
+int loc_set(char *key, size_t key_len, zval *data, long ttl, int add) {
+	time_t tv;
+	int flag = Z_TYPE_P(value);
+	int result = 0;
+	void *compress;
+	unsigned int compress_len, out_len;
+
+	if(key_len > C_STORAGE_MAX_KEY_LEN) {
+		php_error_docref(NULL, E_WARNING, "Key too big, can not storage");
+		return 0;
+	}
+
+	add = add > 0? 1: 0;
+
+	tv = time((time_t *)NULL);
+	if(ttl <= 0) {
+		ttl = tv + 7200;
+	} else {
+		ttl += tv;
+	}
+	switch(flag) {
+		case IS_TRUE:
+		case IS_FALSE:
+			result = c_storage_update(key, key_len, (void *)&flag, sizeof(int), ttl, flag, add, tv);
+			break;
+		case IS_LONG:
+			result = c_storage_update(key, key_len, (void *)&Z_LVAL_P(data), sizeof(long), ttl, flag, add, tv);
+			break;
+		case IS_DOUBLE:
+			result = c_storage_update(key, key_len, (void *)&Z_DVAL_P(data), sizeof(double), ttl, flag, add, tv);
+			break;
+		case IS_STRING:
+		case IS_CONSTANT: 
+			if(Z_STRLEN_P(value) > C_STORAGE_SEGMENT_BODY_SIZE(shared_header)) {
+				php_error_docref(NULL, E_WARNING, "Value too long(%d), can not be storaged", Z_STRLEN_P(value));
+				return 0;				
+			}
+
+			if(Z_STRLEN_P(value) > LOC_VAL_COMPRESS_MIN_LEN) {
+				out_len = Z_STRLEN_P(value) - 4;
+				compress = malloc(out_len);
+				compress_len = lzf_compress((void*)Z_STRVAL_P(value), Z_STRLEN_P(value), compress, out_len);
+				if(!compress_len || compress_len > out_len) {
+					php_error_docref(NULL, E_WARNING, "Compressd fail");
+					free(compress);
+					return 0;
+				}
+
+				flag |= (Z_STRLEN_P(value) << LOC_VAL_ORIG_LEN_SHIT);
+				result = c_storage_update(key, key_len, compress, compress_len, ttl, flag, add, tv);
+				free(compress);
+			} else {
+				result = c_storage_update(key, key_len, (void*)Z_STRVAL_P(value), Z_STRLEN_P(value), ttl, flag, add, tv);
+			}
+			break;
+#ifdef IS_CONSTANT_ARRAY
+			case IS_CONSTANT_ARRAY:
+#endif				
+			case IS_ARRAY:
+			case IS_OBJECT:
+				smart_str sb = {0};
+				loc_serializer_pack(value, &sb);
+				if(sb.s->len > C_STORAGE_SEGMENT_BODY_SIZE(shared_header)) {
+					php_error_docref(NULL, E_WARNING, "Value too long(%d), can not be storaged", sb.s->len);
+					smart_str_free(&sb);
+					return 0;						
+				}
+
+				if(sb.s->len > LOC_VAL_COMPRESS_MIN_LEN) {
+					out_len = sb.s->len - 4;
+					compress = malloc(out_len);
+					compress_len = lzf_compress((void*)ZSTR_VAL(sb.s), ZSTR_LEN(sb.s), compress, out_len);
+					if(!compress_len || compress_len > out_len) {
+						php_error_docref(NULL, E_WARNING, "Compressd fail");
+						free(compress);
+						smart_str_free(&sb);
+						return 0;
+					}
+
+					flag |= (sb.s->len << LOC_VAL_ORIG_LEN_SHIT);
+					result = c_storage_update(key, key_len, compress, compress_len, ttl, flag, add, tv);
+					free(compress);					
+				} else {
+					result = c_storage_update(key, key_len, (void*)ZSTR_VAL(sb.s), ZSTR_LEN(sb.s), ttl, flag, add, tv);
+					smart_str_free(&sb);
+				}
+				break;
+			case IS_RESOURCE:
+				php_error_docref(NULL, E_WARNING, "Type 'IS_RESOURCE' cannot be stored");
+				break;
+			default:
+				php_error_docref(NULL, E_WARNING, "Unsupported valued type to be stored '%d'", flag);
+				break;
+	}
+
+	return result;
+}
+
 /* {{{ loc_functions[]
  *
  * Every user visible function must have an entry in loc_functions[].
  */
 PHP_METHOD(loc, __construct) {
-	php_error_docref(NULL, E_WARNING, "c_storage_segment_num: %d", C_STORAGE_SEGMENT_NUM(shared_header));
+	if (!LOC_G(enable)) {
+		return;
+	}	
 }
 /* }}} */
 
 PHP_METHOD(loc, get) {
 
+	char *key;
+	size_t key_len;
+	void *data;
+	unsigned int size, flag;
+	time_t tv;
+
+	if(!LOC_G(enable)) {
+		RETURN_FALSE; 
+	}
+
+	if (zend_parse_parameters(ZEND_NUM_ARGS(), "s", &key, &key_len) == FAILURE) {
+		return;
+	}	
+
+	if(key_len > C_STORAGE_MAX_KEY_LEN) {
+		php_error_docref(NULL, E_WARNING, "Key too big, can not storage");
+		RETURN_FALSE;
+	}
+
+	tv = time((time_t *)NULL);
+
+	if(c_storage_find(key, key_len, &data, &size, &flag, tv)) {
+		switch((flag & LOC_VAL_TPYE_MASK)) {
+			case IS_TRUE:
+				if(size == sizeof(int)) {
+					ZVAL_TRUE(return_value);
+				}
+				free(data);
+				break;
+			case IS_FALSE:
+				if(size == sizeof(int)) {
+					ZVAL_FALSE(return_value);
+				}
+				free(data);
+				break;		
+			case IS_LONG:
+				if(size == sizeof(long)) {
+					ZVAL_LONG(return_value, *(long*)data);
+				}	
+				free(data);
+				break;
+			case IS_DOUBLE:
+				if(size == sizeof(double)) {
+					ZVAL_DOUBLE(return_value, *(double*)data);
+				}	
+				free(data);
+				break;
+			case IS_STRING:
+			case IS_CONSTANT:
+				if(flag & LOC_VAL_COMPRESS) {
+					unsigned int orig_len = flag >> LOC_VAL_ORIG_LEN_SHIT;
+					void *orig_data;
+					unsigned int length;
+					orig_data = malloc(orig_len);
+					length = lzf_decompress(data, size, orig_data, orig_len);
+					if(!length) {
+						php_error_docref(NULL, E_WARNING, "Loc::get decompress value error");
+						free(orig_data);
+						free(data);
+						return_value = NULL;
+						RETURN_FALSE;
+					}
+
+					ZVAL_STRINGL(return_value, (char*)orig_data, orig_len);
+					free(orig_data);
+					free(data);
+				} else {
+					ZVAL_STRINGL(return_value, (char*)data, size);	
+					free(data);						
+				}
+				break;
+#ifdef IS_CONSTANT_ARRAY
+			case IS_CONSTANT_ARRAY:
+#endif				
+			case IS_ARRAY:
+			case IS_OBJECT:
+				if(flag & LOC_VAL_COMPRESS) {
+					unsigned int orig_len = flag >> LOC_VAL_ORIG_LEN_SHIT;
+					void *orig_data;
+					unsigned int length;
+					orig_data = malloc(orig_len);
+					length = lzf_decompress(data, size, orig_data, orig_len);
+					if(!length) {
+						php_error_docref(NULL, E_WARNING, "Loc::get decompress value error");
+						free(orig_data);
+						free(data);
+						return_value = NULL;
+						RETURN_FALSE;
+					}
+
+					free(data);
+					data = orig_data;
+					size = orig_len;
+				} 
+
+				return_value = loc_serializer_pack_unpack((char*)data, size, return_value);
+				if(!return_value) {
+					php_error_docref(NULL, E_WARNING, "Loc::get unserializer fail");
+					RETURN_FALSE;
+				}
+
+				free(data);
+				break;
+			default:
+				free(data);
+				php_error_docref(NULL, E_WARNING, "Unexpected valued type '%d'", flag);
+				return_value = NULL;
+				break;			
+		}
+	} else {
+		return_value = NULL;
+	}
 }
 /* }}} */
 
 PHP_METHOD(loc, set) {
+	char *key;
+	size_t key_len;
+	long ttl = 0;
+	zval *data;
+
+	if(!LOC_G(enable)) {
+		RETURN_FALSE; 
+	}
+
+	if (zend_parse_parameters(ZEND_NUM_ARGS(), "sz|l", &key, &key_len, &data, &ttl) == FAILURE) {
+		return;
+	}
+
+	if(loc_set(key, key_len, data, ttl, 0)) {
+		RETURN_TRUE;
+	} else {
+		RETURN_FALSE;
+	}
 
 }
 /* }}} */
 
 PHP_METHOD(loc, add) {
+	char *key;
+	size_t key_len;
+	long ttl = 0;
+	zval *data;
+
+	if(!LOC_G(enable)) {
+		RETURN_FALSE; 
+	}
+
+	if (zend_parse_parameters(ZEND_NUM_ARGS(), "sz|l", &key, &key_len, &data, &ttl) == FAILURE) {
+		return;
+	}
+
+	if(loc_set(key, key_len, data, ttl, 1)) {
+		RETURN_TRUE;
+	} else {
+		RETURN_FALSE;
+	}
 
 }
 /* }}} */
 
 PHP_METHOD(loc, delete) {
+	char *key;
+	size_t key_len;
 
+	if(!LOC_G(enable)) {
+		RETURN_FALSE; 
+	}
+
+	if (zend_parse_parameters(ZEND_NUM_ARGS(), "s", &key, &key_len) == FAILURE) {
+		return;
+	}
+
+	if(c_storage_delete(key, key_len)) {
+		RETURN_TRUE;
+	} else {
+		RETURN_FALSE;
+	}
 }
 /* }}} */
 
 PHP_METHOD(loc, flush) {
 
+	if(!LOC_G(enable)) {
+		RETURN_FALSE; 
+	}
+
+	c_storage_flush();
+
+	RETURN_TRUE;
 }
 /* }}} */
 

@@ -194,7 +194,7 @@ void c_storage_shutdown() {
 }
 /* }}} */
 
-int c_storage_find(char *key, unsigned int len, void **data, unsigned int *size,/* unsigned int *flag,*/ unsigned long tv) {
+int c_storage_find(char *key, unsigned int len, void **data, unsigned int *size, unsigned int *flag, unsigned long tv) {
     
     unsigned int hash, kv_len, k_index;
     unsigned long k_offset, kv_num;
@@ -232,6 +232,7 @@ int c_storage_find(char *key, unsigned int len, void **data, unsigned int *size,
         k->val.atime = tv;
         *data = v;
         *size = k->val.len;
+        *flag = k->flag;
         C_STORAGE_HITS(shared_header);
         pthread_rwlock_unlock(&(shared_header->rlock));
         return C_CACHE_FOUND;
@@ -244,7 +245,7 @@ miss:
 }
 /* }}} */
 
-int c_storage_update(char *key, unsigned int len, void *data, unsigned int size, unsigned int ttl,/* unsigned int *flag,*/ unsigned int add, unsigned long tv) {
+int c_storage_update(char *key, unsigned int len, void *data, unsigned int size, unsigned int ttl, unsigned int flag, unsigned int add, unsigned long tv) {
 
     unsigned int hash, kv_len, k_index, segment_index;
     unsigned long k_offset, kv_num, offset;
@@ -311,6 +312,7 @@ insert:
         k->len = len;
         k->ttl = ttl;
         k->h = hash;
+        k->flag = flag;
 
         v = c_cache_allocator_raw_alloc(&shared_header, &shared_segments, size, hash, &segment_index, &offset);
 

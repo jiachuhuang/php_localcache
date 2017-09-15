@@ -9,6 +9,7 @@
 #include <unistd.h>
 #include <time.h>
 
+/*
 extern c_shared_header *shared_header;
 
 int c_cache_get(char *key, unsigned int len, void **data, unsigned int *size) {
@@ -62,7 +63,7 @@ int main(int argc, char const *argv[]) {
 	c_storage_shutdown();
 	return 0;
 }
-
+*/
 
 
 

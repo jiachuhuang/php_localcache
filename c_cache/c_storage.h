@@ -13,6 +13,7 @@
 #define C_STORAGE_KEY_NUM(x) ((x)->k_num)
 #define C_STORAGE_SEGMENT_NUM(x) ((x)->segment_num)
 #define C_STORAGE_SEGMENT_SIZE(x) ((x)->segment_size)
+#define C_STORAGE_SEGMENT_BODY_SIZE(x) (C_STORAGE_SEGMENT_SIZE(x)-32)
 
 #define C_STORAGE_CRC_THRESHOLD 256
 
@@ -58,15 +59,15 @@ typedef struct {
 	unsigned long crc;
 	unsigned long ttl;
 	unsigned int len;
-	/* unsigned int flag; */
+	unsigned int flag; 
 	unsigned char key[C_STORAGE_MAX_KEY_LEN];
 	c_kv_val val;
 } c_kv_key;
 
 int c_storage_startup(char *shm_filename, unsigned int k_size, unsigned int v_size, char **msg);
 void c_storage_shutdown();
-int c_storage_find(char *key, unsigned int len, void **data, unsigned int *size,/* unsigned int *flag,*/ unsigned long tv);
-int c_storage_update(char *key, unsigned int len, void *data, unsigned int size, unsigned int ttl,/* unsigned int *flag,*/ unsigned int add, unsigned long tv);
+int c_storage_find(char *key, unsigned int len, void **data, unsigned int *size, unsigned int *flag, unsigned long tv);
+int c_storage_update(char *key, unsigned int len, void *data, unsigned int size, unsigned int ttl, unsigned int flag, unsigned int add, unsigned long tv);
 int c_storage_delete(char *key, unsigned int len);
 void c_storage_flush();
 /* int c_storage_get_info(); */

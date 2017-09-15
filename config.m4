@@ -42,6 +42,7 @@ if test "$PHP_LOC" != "no"; then
 
   dnl # --with-loc -> add include path
   PHP_ADD_INCLUDE($LOC_DIR/c_cache)
+  PHP_ADD_INCLUDE($LOC_DIR/lzf)
 
   dnl # --with-loc -> check for lib and symbol presence
   dnl LIBNAME=loc # you may want to change this
@@ -59,7 +60,7 @@ if test "$PHP_LOC" != "no"; then
   dnl
   dnl PHP_SUBST(LOC_SHARED_LIBADD)
 
-  LOC_FILES="loc.c c_cache/c_shared_allocator.c c_cache/c_shared_mmap.c c_cache/c_storage.c"
+  LOC_FILES="loc.c c_cache/c_shared_allocator.c c_cache/c_shared_mmap.c c_cache/c_storage.c lzf/lzf_c.c lzf/lzf_d.c serializer/loc_serializer.c"
 
   PHP_NEW_EXTENSION(loc, ${LOC_FILES}, $ext_shared)
 fi

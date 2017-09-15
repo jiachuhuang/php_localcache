@@ -38,6 +38,11 @@ extern zend_module_entry loc_module_entry;
 #include "TSRM.h"
 #endif
 
+#define LOC_VAL_TPYE_MASK 31
+#define LOC_VAL_COMPRESS 32
+#define LOC_VAL_COMPRESS_MIN_LEN 128
+#define LOC_VAL_ORIG_LEN_SHIT 6
+
 
 ZEND_BEGIN_MODULE_GLOBALS(loc)
   zend_bool enable;
