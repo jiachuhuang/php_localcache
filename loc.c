@@ -407,6 +407,22 @@ PHP_METHOD(loc, flush) {
 }
 /* }}} */
 
+PHP_METHOD(loc, info) {
+
+	if(!LOC_G(enable)) {
+		RETURN_FALSE; 
+	}
+
+	array_init(return_value);
+
+	add_assoc_long(return_value, "key_num", shared_header->k_num);
+	add_assoc_long(return_value, "segment_num", shared_header->segment_num);
+	add_assoc_long(return_value, "cache_miss", shared_header->miss);
+	add_assoc_long(return_value, "cache_fails", shared_header->fails);
+	add_assoc_long(return_value, "cache_hits", shared_header->hits);
+}
+/* }}} */
+
 zend_function_entry loc_methods[] = {
 	PHP_ME(loc, __construct, arginfo_loc_void, ZEND_ACC_PUBLIC|ZEND_ACC_CTOR)	
 	PHP_ME(loc, get, arginfo_loc_get, ZEND_ACC_PUBLIC)	
@@ -414,6 +430,7 @@ zend_function_entry loc_methods[] = {
 	PHP_ME(loc, add, arginfo_loc_setter, ZEND_ACC_PUBLIC)	
 	PHP_ME(loc, delete, arginfo_loc_delete, ZEND_ACC_PUBLIC)	
 	PHP_ME(loc, flush, arginfo_loc_void, ZEND_ACC_PUBLIC)	
+	PHP_ME(loc, info, arginfo_loc_void, ZEND_ACC_PUBLIC)	
 	{NULL, NULL, NULL}
 };
 /* }}} */
