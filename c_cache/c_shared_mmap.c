@@ -15,7 +15,7 @@
 #include <sys/stat.h>
 #include <math.h>
 
-static int create_shmmap(void **p, c_shared_header **shared_header, c_shared_segment **shared_segments, const char *shared_name, unsigned long k_size, unsigned long v_size, char **error_in) {
+static int create_shmmap(void **p, c_shared_header **shared_header, c_shared_segment **shared_segments, /*const char *shared_name,*/ unsigned long k_size, unsigned long v_size, char **error_in) {
 	unsigned long header_size, alloc_size, segment_size, segments_num = 1024, v_offset, k_num;
 	int fd;
 	int try = 0, create, segment_body_size, k_len;
@@ -39,38 +39,38 @@ static int create_shmmap(void **p, c_shared_header **shared_header, c_shared_seg
 
 	alloc_size = header_size + k_size + v_size;
 
-again:
-	if(try > 3) {
-		*error_in = "timeout";
-		goto error;
-	}
+// again:
+// 	if(try > 3) {
+// 		*error_in = "timeout";
+// 		goto error;
+// 	}
 
-	fd = open(shared_name, C_ALLOC_FILE_OPEN_CREAT_FLAG, C_ALLOC_FILE_MODEL);
+// 	fd = open(shared_name, C_ALLOC_FILE_OPEN_CREAT_FLAG, C_ALLOC_FILE_MODEL);
 
-	if(fd == -1 && errno == EEXIST) {
-		goto exist;
-	} else if(fd == -1) {
-		*error_in = "open";
-		goto error;
-	} else {
-		goto new;
-	}
+// 	if(fd == -1 && errno == EEXIST) {
+// 		goto exist;
+// 	} else if(fd == -1) {
+// 		*error_in = "open";
+// 		goto error;
+// 	} else {
+// 		goto new;
+// 	}
 
 new:
 	create = 1;
 
-	if(ftruncate(fd, alloc_size) == -1) {
-		*error_in = "ftruncate";
-		goto error;
-	}
+	// if(ftruncate(fd, alloc_size) == -1) {
+	// 	*error_in = "ftruncate";
+	// 	goto error;
+	// }
 
-	*p = (void*)mmap(NULL, alloc_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+	*p = (void*)mmap(NULL, alloc_size, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
 	if(*p == MMAP_FAIL) {
 		*error_in = "mmap";
 		goto error;
 	}	
 
-	close(fd);
+	// close(fd);
 
 	// init shared header
 	*shared_header = (c_shared_header *)*p;
@@ -149,81 +149,81 @@ new:
 	(*shared_header)->init = 1;
 	return C_CACHE_OK;
 
-exist:
-	fd = open(shared_name, C_ALLOC_FILE_OPEN_FLAG, C_ALLOC_FILE_MODEL);
-	if(fd == -1) {
-		if(errno == ENOENT) {
-			++try;
-			goto again;
-		}
-	}
+// exist:
+// 	fd = open(shared_name, C_ALLOC_FILE_OPEN_FLAG, C_ALLOC_FILE_MODEL);
+// 	if(fd == -1) {
+// 		if(errno == ENOENT) {
+// 			++try;
+// 			goto again;
+// 		}
+// 	}
 
-	*p = (void*)mmap(NULL, alloc_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-	if(*p == MMAP_FAIL) {
-		*error_in = "mmap";
-		goto error;
-	}	
+// 	*p = (void*)mmap(NULL, alloc_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+// 	if(*p == MMAP_FAIL) {
+// 		*error_in = "mmap";
+// 		goto error;
+// 	}	
 
-	close(fd);	
+// 	close(fd);	
 
-	create = 0;
+// 	create = 0;
 
-	*shared_header = (c_shared_header *)*p;
+// 	*shared_header = (c_shared_header *)*p;
 
-	int retry = 3;
+// 	int retry = 3;
 
-	while(retry--) {
-		if((*shared_header)->init == 1) {
-			break;
-		} else if(!retry) {
-			*error_in = "timeout";
-			goto error;
-		}
-		usleep(2 * 1000);
-	}
+// 	while(retry--) {
+// 		if((*shared_header)->init == 1) {
+// 			break;
+// 		} else if(!retry) {
+// 			*error_in = "timeout";
+// 			goto error;
+// 		}
+// 		usleep(2 * 1000);
+// 	}
 
-	*shared_segments = (c_shared_segment *)calloc(1, segments_num * sizeof(c_shared_segment));
+// 	*shared_segments = (c_shared_segment *)calloc(1, segments_num * sizeof(c_shared_segment));
 
-	segments_num = (*shared_header)->segment_num;
-	segment_size = (*shared_header)->segment_size;
+// 	segments_num = (*shared_header)->segment_num;
+// 	segment_size = (*shared_header)->segment_size;
 
-	if(!*shared_segments) {
-		*error_in = "calloc";
-		goto error;
-	}
+// 	if(!*shared_segments) {
+// 		*error_in = "calloc";
+// 		goto error;
+// 	}
 
-	// init shared_segments
-	for (int i = 0; i < segments_num; ++i) {
-		(*shared_segments)[i].p = *p + v_offset + i * segment_size;	
+// 	// init shared_segments
+// 	for (int i = 0; i < segments_num; ++i) {
+// 		(*shared_segments)[i].p = *p + v_offset + i * segment_size;	
 
-		segment_body_size = alloc_size - (v_offset + i * segment_size + segment_size);
+// 		segment_body_size = alloc_size - (v_offset + i * segment_size + segment_size);
 
-		if( segment_body_size >= 0 ) {
-			(*shared_segments)[i].seg_header = (c_shared_segment_header*)((*shared_segments)[i].p);
-		} else {
-			segment_body_size = alloc_size - (v_offset + i * segment_size) - sizeof(c_shared_segment_header);
+// 		if( segment_body_size >= 0 ) {
+// 			(*shared_segments)[i].seg_header = (c_shared_segment_header*)((*shared_segments)[i].p);
+// 		} else {
+// 			segment_body_size = alloc_size - (v_offset + i * segment_size) - sizeof(c_shared_segment_header);
 
-			if(segment_body_size >= 0) {
-				(*shared_segments)[i].seg_header = (c_shared_segment_header*)((*shared_segments)[i].p);
-			} else {
-				(*shared_segments)[i].seg_header = NULL;
-			}
-		}
-	}	
+// 			if(segment_body_size >= 0) {
+// 				(*shared_segments)[i].seg_header = (c_shared_segment_header*)((*shared_segments)[i].p);
+// 			} else {
+// 				(*shared_segments)[i].seg_header = NULL;
+// 			}
+// 		}
+// 	}	
 
-	return C_CACHE_OK;
+// 	return C_CACHE_OK;
 
 pthreaderr:
 	pthread_rwlockattr_destroy(&rwattr);
 	
 error:
-	if(fd > 0) {
-		close(fd);
-	}
+	// if(fd > 0) {
+	// 	close(fd);
+	// }
 
-	if(create) {
-		unlink(shared_name);
-	}
+	// if(create) {
+	// 	unlink(shared_name);
+	// }
 
 	if(*p != MMAP_FAIL) {
 		munmap(*p, alloc_size);
@@ -233,10 +233,10 @@ error:
 }
 /* }}} */
 
-static void detach_shmmap(void **p, c_shared_header **shared_header, c_shared_segment **shared_segments, const char *shared_name) {
+static void detach_shmmap(void **p, c_shared_header **shared_header, c_shared_segment **shared_segments/*, const char *shared_name*/) {
 	unsigned long alloc_size;
 	munmap(*p, (*shared_header)->alloc_size);
-	unlink(shared_name);
+	// unlink(shared_name);
 	free(*shared_segments);
 }
 /* }}} */

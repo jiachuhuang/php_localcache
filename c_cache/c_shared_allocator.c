@@ -11,10 +11,10 @@
 	#error(no builtin shared memory supported)	
 #endif
 
-int c_cache_allocator_startup(void **p, c_shared_header **shared_header, c_shared_segment **shared_segments, const char *shared_name, unsigned long k_size, unsigned long v_size, char **error_in) {
+int c_cache_allocator_startup(void **p, c_shared_header **shared_header, c_shared_segment **shared_segments, /*const char *shared_name,*/ unsigned long k_size, unsigned long v_size, char **error_in) {
 	int ret;
 
-	ret = create_shmmap(p, shared_header, shared_segments, shared_name, k_size, v_size, error_in);
+	ret = create_shmmap(p, shared_header, shared_segments, /*shared_name,*/ k_size, v_size, error_in);
 
 	if(ret == C_CACHE_FAIL) {
 		return C_CACHE_FAIL;
@@ -23,9 +23,9 @@ int c_cache_allocator_startup(void **p, c_shared_header **shared_header, c_share
 	return C_CACHE_OK;
 }
 
-void c_cache_allocator_shutdown(void **p, c_shared_header **shared_header, c_shared_segment **shared_segments, const char *shared_name) {
+void c_cache_allocator_shutdown(void **p, c_shared_header **shared_header, c_shared_segment **shared_segments/*, const char *shared_name*/) {
 
-	detach_shmmap(p, shared_header, shared_segments, shared_name);
+	detach_shmmap(p, shared_header, shared_segments/*, shared_name*/);
 }
 
 void *c_cache_allocator_raw_alloc(c_shared_header **shared_header, c_shared_segment **shared_segments, const unsigned int real_size, const unsigned int hash, unsigned int *seg, unsigned long *offset) {

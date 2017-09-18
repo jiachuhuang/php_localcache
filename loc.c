@@ -86,7 +86,7 @@ PHP_INI_BEGIN()
     STD_PHP_INI_BOOLEAN("loc.enable",      "1", PHP_INI_ALL, OnUpdateLong, enable, zend_loc_globals, loc_globals)
     STD_PHP_INI_ENTRY("loc.keys_memory_size", "4M", PHP_INI_SYSTEM, OnChangeKeysMemoryLimit, k_msize, zend_loc_globals, loc_globals)
     STD_PHP_INI_ENTRY("loc.values_memory_size", "64M", PHP_INI_SYSTEM, OnChangeValsMemoryLimit, v_msize, zend_loc_globals, loc_globals)
-    STD_PHP_INI_ENTRY("loc.shm_file", "/tmp/shm.file.dat", PHP_INI_ALL, OnUpdateString, shm_file, zend_loc_globals, loc_globals)
+    // STD_PHP_INI_ENTRY("loc.shm_file", "/tmp/shm.file.dat", PHP_INI_ALL, OnUpdateString, shm_file, zend_loc_globals, loc_globals)
 PHP_INI_END()
 
 /* }}} */
@@ -444,10 +444,14 @@ PHP_MINIT_FUNCTION(loc)
 	char *msg;
 	zend_class_entry ce;
 
+	if(!strcmp(sapi_module.name, "cli")) {
+		LOC_G(enable) = 0;
+	}	
+
 	REGISTER_INI_ENTRIES();
 
 	if(LOC_G(enable)) {
-		if(!c_storage_startup(LOC_G(shm_file), LOC_G(k_msize), LOC_G(v_msize), &msg)) {
+		if(!c_storage_startup(/*LOC_G(shm_file),*/ LOC_G(k_msize), LOC_G(v_msize), &msg)) {
 			php_error(E_ERROR, "Shared memory allocator startup failed at '%s': %s", msg, strerror(errno));
 			return FAILURE;
 		} 
@@ -480,7 +484,7 @@ PHP_MINFO_FUNCTION(loc)
 	php_info_print_table_start();
 	php_info_print_table_header(2, "loc support", "enabled");
 	php_info_print_table_row(2, "Version", PHP_LOC_VERSION);
-	php_info_print_table_row(2, "Shm file", LOC_G(shm_file));
+	// php_info_print_table_row(2, "Shm file", LOC_G(shm_file));
 	php_info_print_table_end();
 
 	/* Remove comments if you have entries in php.ini

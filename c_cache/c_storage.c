@@ -6,7 +6,7 @@
 #include <pthread.h>
 
 void *p;
-char *shared_name;
+// char *shared_name;
 c_shared_header *shared_header;
 c_shared_segment *shared_segments;
 
@@ -177,11 +177,11 @@ static inline unsigned int c_storage_crc32(char *data, unsigned int size) /* {{{
 }
 /* }}} */
 
-int c_storage_startup(char *shm_filename, unsigned int k_size, unsigned int v_size, char **msg) {
+int c_storage_startup(/*char *shm_filename,*/ unsigned int k_size, unsigned int v_size, char **msg) {
 
-    shared_name = shm_filename;
+    // shared_name = shm_filename;
 
-    if(!c_cache_allocator_startup(&p, &shared_header, &shared_segments, shared_name, k_size, v_size, msg)) {
+    if(!c_cache_allocator_startup(&p, &shared_header, &shared_segments, /*shared_name,*/ k_size, v_size, msg)) {
         return C_CACHE_FAIL;
     }
 
@@ -190,7 +190,7 @@ int c_storage_startup(char *shm_filename, unsigned int k_size, unsigned int v_si
 /* }}} */
 
 void c_storage_shutdown() {
-    c_cache_allocator_shutdown(&p, &shared_header, &shared_segments, shared_name);
+    c_cache_allocator_shutdown(&p, &shared_header, &shared_segments/*, shared_name*/);
 }
 /* }}} */
 
