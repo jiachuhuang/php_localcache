@@ -56,7 +56,7 @@ static int create_shmmap(void **p, c_shared_header **shared_header, c_shared_seg
 // 		goto new;
 // 	}
 
-new:
+// new:
 	create = 1;
 
 	// if(ftruncate(fd, alloc_size) == -1) {
